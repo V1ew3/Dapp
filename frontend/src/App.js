@@ -108,13 +108,6 @@ useEffect(() => {
               />
 
               <div>
-                <Button 
-                  size="small" 
-                  type="dashed" 
-                  danger 
-                  onClick={() => { localStorage.clear(); window.location.reload(); }}>
-                  重置数据
-                </Button>
                 {/* 动态显示：如果没连接显示“连接钱包”，连接了显示缩短的地址 */}
                 {account ? (
                   <Button type="default" ghost style={{ color: '#52c41a', borderColor: '#52c41a' }}>

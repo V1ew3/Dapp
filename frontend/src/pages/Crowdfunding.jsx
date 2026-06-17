@@ -1,72 +1,102 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Statistic, Progress, Button, InputNumber, Typography, Space, Divider, message, List, Avatar } from 'antd';
 import { RocketOutlined, UserOutlined, ClockCircleOutlined, FireOutlined } from '@ant-design/icons';
 import { ethers } from 'ethers';
-import { MOCK_RECEIVER_ADDRESS } from '../constants';
+import { CROWDFUND_ADDRESS } from '../constants';
+import CrowdFundABI from '../assets/abis/CrowdFund.json';
 
 const { Title, Text } = Typography;
 const { Countdown } = Statistic;
-
-// 模拟一些数据
-const mockData = {
-  title: "Web3 极客纪念币众筹",
-  description: "参与众筹，获得独家项目代币，可在商城兑换限量版 T 恤和帆布包！",
-  goal: 10, // 目标 10 ETH
-  raised: 6.5, // 已筹 6.5 ETH
-  investors: 128,
-  deadline: Date.now() + 1000 * 60 * 60 * 24 * 3, // 3天后截止
-};
 
 export default function Crowdfunding() {
   const [investAmount, setInvestAmount] = useState(0.01);
   const [loading, setLoading] = useState(false);
 
-  const recentInvests = [
-  { address: "0x165D632b3B34762B1d1B254b0AFaDb41561E113f", amount: "0.5", time: "2分钟前" },
-  { address: "0x041BFee980a72f7fa59ad07c5e9059f58c5be46b", amount: "0.1", time: "10分钟前" },
-  { address: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", amount: "1.2", time: "1小时前" },
-  ];
-  // 核心：模拟投资转账函数
+  // 1. 定义存放合约真实数据的状态
+  const [contractData, setContractData] = useState({
+    raised: "0",
+    goal: "0",
+    investors: "0",
+    deadline: 0,
+    recentInvests: [] // 初始为空
+  });
+
+  // 3. 从链上获取真实数据的函数
+  const fetchContractData = async () => {
+    if (!window.ethereum) return;
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(CROWDFUND_ADDRESS, CrowdFundABI.abi, provider);
+    
+      // --- A. 读取基础状态变量 ---
+      const [raised, goal, count, deadline] = await Promise.all([
+        contract.totalRaised(),
+        contract.goal(),
+        contract.investorCount(),
+        contract.deadline()
+      ]);
+
+      // --- B. 抓取真实的“投资事件”记录 ---
+      // 查找从合约部署到现在所有的 Funded 事件
+      const filter = contract.filters.Funded();
+      const events = await contract.queryFilter(filter, 0, 'latest'); 
+
+      // 解析事件数据
+      const realInvests = events.map(event => {
+        return {
+          address: event.args[0],
+          amount: ethers.formatEther(event.args[1]),
+          time: "已确认" 
+        };
+      }).reverse(); // 最新的投资排在最上面
+
+      // --- C. 更新状态 ---
+      setContractData({
+        raised: ethers.formatEther(raised),
+        goal: ethers.formatEther(goal),
+        investors: count.toString(),
+        deadline: Number(deadline) * 1000,
+        recentInvests: realInvests 
+      });
+
+    } catch (error) {
+      console.error("获取合约真实数据失败:", error);
+    }
+  };
+
+  // 4. 页面加载时读取一次
+  useEffect(() => {
+    fetchContractData();
+  }, []);
+
+  // 5. 核心投资函数：调用合约的 fund 方法
   const handleInvest = async () => {
     if (!window.ethereum) {
       message.error("请先安装 MetaMask");
       return;
     }
     setLoading(true);
-    // 使用 antd 的 message.loading 创建一个可以手动销毁的提示
     const hide = message.loading('正在发起交易，请在 MetaMask 中确认...', 0);
+    
     try {
-      // 1. 初始化 Provider 和 Signer
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CROWDFUND_ADDRESS, CrowdFundABI.abi, signer);
 
-      // 2. 发起真实的转账交易 (模拟向合约投钱)
-      const tx = await signer.sendTransaction({
-        to: MOCK_RECEIVER_ADDRESS,
+      // 调用合约 fund 函数并发送 ETH
+      const tx = await contract.fund({
         value: ethers.parseEther(investAmount.toString())
       });
 
-      console.log("交易已发出，哈希值:", tx.hash);
-      message.loading({ content: '交易已提交，等待区块确认...', key: 'updatable', duration: 0 });
-
-      // 3. 等待矿工打包确认
+      message.loading({ content: '交易已提交，等待区块确认...', key: 'updatable' });
       await tx.wait();
 
-      const rewardRatio = 10000; // 1 ETH = 10000 代币
-      const earnedTokens = investAmount * rewardRatio;
-
-      // 更新本地代币余额
-      const currentTokens = Number(localStorage.getItem('myTokenBalance') || 0);
-      localStorage.setItem('myTokenBalance', currentTokens + earnedTokens);
-
-      hide(); // 关闭加载提示
-      message.success({ 
-        content: `投资成功！已获得 ${earnedTokens} 代币，钱已转入模拟地址`, 
-        key: 'updatable', 
-        duration: 4 
-      });
+      hide();
+      message.success({ content: '投资成功！代币已由合约自动发放', key: 'updatable', duration: 3 });
       
-      // 这里以后可以写：刷新页面余额的逻辑
+      // 投资成功后刷新页面数据
+      fetchContractData(); 
+      
     } catch (error) {
       hide();
       console.error("交易失败:", error);
@@ -80,23 +110,30 @@ export default function Crowdfunding() {
     }
   };
 
+  // 计算进度百分比
+  const progressPercent = contractData.goal > 0 
+    ? (Number(contractData.raised) / Number(contractData.goal) * 100).toFixed(1) 
+    : 0;
+
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
       {/* 项目标题区 */}
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <Title level={2}><RocketOutlined /> {mockData.title}</Title>
-        <Text type="secondary" style={{ fontSize: '16px' }}>{mockData.description}</Text>
+        <Title level={2}><RocketOutlined /> Web3 极客纪念币众筹</Title>
+        <Text type="secondary" style={{ fontSize: '16px' }}>
+          参与众筹，获得独家项目代币，可在商城兑换限量版周边！
+        </Text>
       </div>
 
       <Row gutter={24}>
         {/* 左侧：进度与统计 */}
         <Col span={16}>
-          <Card bordered={false} className="shadow-card">
+          <Card bordered={false}>
             <Row gutter={16}>
               <Col span={8}>
                 <Statistic 
                   title="已筹集" 
-                  value={mockData.raised} 
+                  value={contractData.raised} 
                   precision={2} 
                   prefix={<FireOutlined style={{ color: '#ff4d4f' }} />} 
                   suffix="ETH" 
@@ -105,14 +142,14 @@ export default function Crowdfunding() {
               <Col span={8}>
                 <Statistic 
                   title="目标金额" 
-                  value={mockData.goal} 
+                  value={contractData.goal} 
                   suffix="ETH" 
                 />
               </Col>
               <Col span={8}>
                 <Statistic 
                   title="参与人数" 
-                  value={mockData.investors} 
+                  value={contractData.investors} 
                   prefix={<UserOutlined />} 
                 />
               </Col>
@@ -121,9 +158,9 @@ export default function Crowdfunding() {
             <Divider />
 
             <div style={{ marginBottom: '20px' }}>
-              <Text strong>众筹进度: {((mockData.raised / mockData.goal) * 100).toFixed(1)}%</Text>
+              <Text strong>众筹进度: {progressPercent}%</Text>
               <Progress 
-                percent={(mockData.raised / mockData.goal) * 100} 
+                percent={progressPercent} 
                 status="active" 
                 strokeColor={{ '0%': '#108ee9', '100%': '#87d068' }}
                 strokeWidth={15}
@@ -131,21 +168,21 @@ export default function Crowdfunding() {
             </div>
           </Card>
 
-          <Card title="最近投资动态" style={{ marginTop: '20px' }}>
+          <Card title="最近投资动态" style={{ marginTop: '20px' }} bordered={false}>
             <List
-                itemLayout="horizontal"
-                dataSource={recentInvests}
-                renderItem={(item) => (
+              itemLayout="horizontal"
+              dataSource={contractData.recentInvests}
+              renderItem={(item) => (
                 <List.Item>
-                    <List.Item.Meta
+                  <List.Item.Meta
                     avatar={<Avatar src={`https://api.dicebear.com/7.x/identicon/svg?seed=${item.address}`} />}
                     title={<span>{item.address.slice(0,6)}...{item.address.slice(-4)} 投资了 {item.amount} ETH</span>}
                     description={item.time}
-                    />
+                  />
                 </List.Item>
-                )}
+              )}
             />
-            </Card>
+          </Card>
         </Col>
 
         {/* 右侧：操作区 */}
@@ -153,7 +190,7 @@ export default function Crowdfunding() {
           <Card title="立即参与" bordered={false}>
             <Countdown 
               title="距离结束还剩" 
-              value={mockData.deadline} 
+              value={contractData.deadline} 
               format="D 天 H 时 m 分 s 秒" 
               prefix={<ClockCircleOutlined />}
             />
@@ -163,7 +200,7 @@ export default function Crowdfunding() {
             <Space direction="vertical" style={{ width: '100%' }}>
               <Text type="secondary">输入投资金额 (ETH):</Text>
               <InputNumber 
-                min={0.01} 
+                min={0.001} 
                 value={investAmount} 
                 onChange={setInvestAmount}
                 style={{ width: '100%' }} 
@@ -174,13 +211,13 @@ export default function Crowdfunding() {
                 size="large" 
                 block 
                 icon={<RocketOutlined />}
-                loading={loading} //绑定加载状态
+                loading={loading}
                 onClick={handleInvest}
               >
                 支持项目
               </Button>
               <Text type="secondary" style={{ fontSize: '12px' }}>
-                * 预计获得: 1000 代币
+                * 1 ETH = 10000 代币 (含早鸟奖励)
               </Text>
             </Space>
           </Card>
