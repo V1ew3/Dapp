@@ -1,13 +1,114 @@
-body {
+/* =========================================
+   1. 全局基础样式与设计系统变量
+   ========================================= */
+:root {
+  --neon-blue: #3b82f6;
+  --neon-cyan: #00f2ff;
+  --neon-purple: #8b5cf6;
+  --bg-dark: #0b0e14;
+  --card-dark: #161b22;
+  --text-white: #ffffff;
+}
+
+* {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark) !important;
+  color: var(--text-white);
+}
+
+/* =========================================
+   2. 字体与渐变效果
+   ========================================= */
+.neon-gradient-text {
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: hue-rotate 5s linear infinite; 
+}
+
+.identity-gradient-text {
+  background: linear-gradient(90deg, #ff0080, #ffcc00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+/* =========================================
+   3. 组件样式 (卡片、按钮、地址框)
+   ========================================= */
+.cyber-card {
+  background: var(--card-dark) !important;
+  border: 1.5px solid rgba(0, 242, 255, 0.4) !important; 
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 242, 255, 0.05);
+}
+
+.cyber-card:hover {
+  border: 1.5px solid var(--neon-cyan) !important;
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.2); 
+}
+
+.neon-button {
+  border: none !important;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)) !important;
+  color: #fff !important;
+  font-weight: bold !important;
+}
+
+.address-code-box {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 242, 255, 0.2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace; 
+  color: var(--neon-cyan) !important;
+  display: inline-block;
+}
+
+.neon-glow {
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.4), inset 0 0 5px rgba(0, 242, 255, 0.2);
+}
+
+/* =========================================
+   4. 跑马灯与动画效果
+   ========================================= */
+.marquee-container {
+  width: 100%;
+  overflow: hidden;
+  background: #000;
+  border-top: 1px solid #30363d;
+  border-bottom: 1px solid #30363d;
+  padding: 8px 0;
+  color: var(--neon-cyan);
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+}
+
+.marquee-content {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: scroll-left 25s linear infinite;
+}
+
+@keyframes scroll-left {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-100%, 0); }
+}
+
+@keyframes hue-rotate {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
 }
